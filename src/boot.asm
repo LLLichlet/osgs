@@ -19,7 +19,7 @@ start:
 
     ; load kernel: AH=02h (read sectors), CH=cyl, CL=sector, DH=head
     mov  ah, 0x02
-    mov  al, 0x04      ; load 4 sectors (2KB)
+    mov  al, 0x08      ; load 8 sectors (4KB)
     mov  ch, 0x00
     mov  cl, 0x02
     mov  dh, 0x00

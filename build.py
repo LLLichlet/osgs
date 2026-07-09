@@ -9,7 +9,7 @@ BUILD = os.path.join(ROOT, "build")
 
 WCC_FLAGS = ["-q", "-ms", "-s", "-os", "-0", "-i=" + INC]
 C_SRCS = ["kernel.c", "vga.c", "keyboard.c", "shell.c",
-          "game.c", "games/pong.c"]
+          "system.c", "game.c", "games/pong.c"]
 
 def run(cmd, *, check=True):
     print(f"\033[36m>>> {' '.join(cmd)}\033[0m")
