@@ -8,7 +8,8 @@ INC = os.path.join(ROOT, "include")
 BUILD = os.path.join(ROOT, "build")
 
 WCC_FLAGS = ["-q", "-ms", "-s", "-os", "-0", "-i=" + INC]
-C_SRCS = ["kernel.c", "vga.c", "keyboard.c", "shell.c"]
+C_SRCS = ["kernel.c", "vga.c", "keyboard.c", "shell.c",
+          "game.c", "games/pong.c"]
 
 def run(cmd, *, check=True):
     print(f"\033[36m>>> {' '.join(cmd)}\033[0m")
@@ -35,6 +36,7 @@ def build():
         src_path = os.path.join(SRC, src_name)
         obj_name = src_name.replace(".c", ".obj")
         obj_path = os.path.join(BUILD, obj_name)
+        os.makedirs(os.path.dirname(obj_path), exist_ok=True)
         run(["wcc", *WCC_FLAGS, "-fo=" + obj_path, src_path])
         objs.append(obj_path)
 
