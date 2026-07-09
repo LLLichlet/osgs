@@ -21,15 +21,17 @@ static void cls_handler(const char *args);
 static void reboot_handler(const char *args);
 static void list_handler(const char *args);
 static void run_handler(const char *args);
+static void about_handler(const char *args);
 
 static cmd_entry cmd_table[] = {
     {"help",   "Show available commands",   help_handler},
     {"cls",    "Clear the screen",          cls_handler},
     {"list",   "List available games",      list_handler},
     {"run",    "Run a game (run <name>)",   run_handler},
+    {"about",  "About this system",         about_handler},
     {"reboot", "Reboot the system",         reboot_handler},
 };
-static int cmd_count = 5;
+static int cmd_count = 6;
 
 static char cmd_buf[CMD_BUF_SZ];
 
@@ -81,6 +83,16 @@ static void help_handler(const char *args) {
 static void cls_handler(const char *args) {
     (void)args;
     vga_clear();
+}
+
+static void about_handler(const char *args) {
+    (void)args;
+    vga_set_attr(VGA_ATTR(VGA_LIGHT_GREEN, VGA_BLACK));
+    vga_puts("osgs - Old-School Games System\n");
+    vga_set_attr(VGA_DEFAULT_ATTR);
+    vga_puts("A tiny real-mode OS for retro gaming.\n");
+    vga_puts("Built with OpenWatcom C + NASM.\n");
+    vga_puts("https://github.com/LLLichlet/osgs\n");
 }
 
 static void reboot_handler(const char *args) {
