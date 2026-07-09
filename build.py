@@ -4,8 +4,11 @@ import os
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(ROOT, "src")
+INC = os.path.join(ROOT, "include")
 BUILD = os.path.join(ROOT, "build")
 
+WCC_FLAGS = ["-q", "-ms", "-s", "-os", "-0", "-i=" + INC]
+C_SRCS = ["kernel.c", "vga.c"]
 
 def run(cmd, *, check=True):
     print(f"\033[36m>>> {' '.join(cmd)}\033[0m")
@@ -15,13 +18,36 @@ def run(cmd, *, check=True):
 def build():
     os.makedirs(BUILD, exist_ok=True)
 
-    # assemble boot sector -> flat binary
-    run(["nasm", "-f", "bin", os.path.join(SRC, "boot.asm"),
+    # assemble boot sector -> flat binary (512 bytes)
+    run(["nasm", "-f", "bin",
+         os.path.join(SRC, "boot.asm"),
          "-o", os.path.join(BUILD, "boot.bin")])
 
-    # assemble kernel entry -> flat binary
-    run(["nasm", "-f", "bin", os.path.join(SRC, "entry.asm"),
-         "-o", os.path.join(BUILD, "kernel.bin")])
+    # assemble entry -> OMF object (for wlink)
+    entry_obj = os.path.join(BUILD, "entry.obj")
+    run(["nasm", "-f", "obj",
+         os.path.join(SRC, "entry.asm"),
+         "-o", entry_obj])
+
+    # compile C sources -> OMF .obj
+    objs = [entry_obj]  # entry MUST be first -> _start at offset 0
+    for src_name in C_SRCS:
+        src_path = os.path.join(SRC, src_name)
+        obj_name = src_name.replace(".c", ".obj")
+        obj_path = os.path.join(BUILD, obj_name)
+        run(["wcc", *WCC_FLAGS, "-fo=" + obj_path, src_path])
+        objs.append(obj_path)
+
+    # link -> raw binary
+    kernel_bin = os.path.join(BUILD, "kernel.bin")
+    linker_args = [
+        "wlink",
+        "OPTION", "QUIET",
+        "FORMAT", "RAW", "BIN",
+        "NAME", kernel_bin,
+        "FILE", ",".join(objs),
+    ]
+    run(linker_args)
 
     print("Build OK")
 

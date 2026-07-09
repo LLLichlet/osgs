@@ -17,9 +17,9 @@ start:
     int  0x13
     jc   disk_error
 
-    ; load kernel: AH=02h (read sectors), AL=1 sector, CH=cyl, CL=sector, DH=head
+    ; load kernel: AH=02h (read sectors), CH=cyl, CL=sector, DH=head
     mov  ah, 0x02
-    mov  al, 0x01
+    mov  al, 0x04      ; load 4 sectors (2KB)
     mov  ch, 0x00
     mov  cl, 0x02
     mov  dh, 0x00
