@@ -54,6 +54,12 @@ void vga_putc(char c) {
         /* cursor_y stays at bottom */
     } else if (c == '\r') {
         cursor_x = 0;
+    } else if (c == '\b') {
+        if (cursor_x > 0) {
+            --cursor_x;
+            VGA_BUF[cursor_y * VGA_COLS + cursor_x] =
+                (uint16_t)((current_attr << 8) | ' ');
+        }
     } else {
         int idx = cursor_y * VGA_COLS + cursor_x;
         VGA_BUF[idx] = (uint16_t)((current_attr << 8) | (uint8_t)c);
