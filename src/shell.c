@@ -88,11 +88,11 @@ static void cls_handler(const char *args) {
 static void about_handler(const char *args) {
     (void)args;
     vga_set_attr(VGA_ATTR(VGA_LIGHT_GREEN, VGA_BLACK));
-    vga_puts("osgs - Old-School Games System\n");
+    vga_puts("  osgs - Old-School Games System\n");
     vga_set_attr(VGA_DEFAULT_ATTR);
-    vga_puts("A tiny real-mode OS for retro gaming.\n");
-    vga_puts("Built with OpenWatcom C + NASM.\n");
-    vga_puts("https://github.com/LLLichlet/osgs\n");
+    vga_puts("  A tiny real-mode OS for retro gaming.\n");
+    vga_puts("  Built with OpenWatcom C + NASM.\n");
+    vga_puts("  https://github.com/LLLichlet/osgs\n");
 }
 
 static void reboot_handler(const char *args) {
