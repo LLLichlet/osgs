@@ -1,17 +1,9 @@
-/* osgs — game manager: registry and launcher. */
+/* osgs — game manager: lists TOC entries, loads & launches game binaries. */
 
 #ifndef GAME_H
 #define GAME_H
 
-typedef void (*game_fn)(void);
-
-typedef struct {
-    const char *name;
-    const char *desc;
-    game_fn     run;
-} game_entry;
-
 void game_list(void);
-int  game_run(const char *name);
+int  game_run(const char *name);   /* 0 = ok, -1 = not found, -2 = disk error */
 
 #endif

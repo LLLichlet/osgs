@@ -1,6 +1,5 @@
 /* osgs — Pong: classic 2-player paddle game. */
 
-#include "game.h"
 #include "vga.h"
 #include "keyboard.h"
 #include "system.h"
@@ -96,7 +95,7 @@ static int sign(int n) {
     return (n > 0) ? 1 : -1;
 }
 
-void game_pong(void) {
+int game_main(void) {
     int p1_y, p2_y, p1_oy, p2_oy;
     int ball_x, ball_y, ball_ox, ball_oy;
     int ball_dx, ball_dy;
@@ -234,4 +233,5 @@ void game_pong(void) {
     vga_putc('\n');
     vga_puts("Press any key to return...\n");
     kbd_getch();
+    return 0;
 }

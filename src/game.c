@@ -1,37 +1,46 @@
-/* osgs — game manager. Central registry of all games. */
+/* osgs — game manager. Loads games from TOC and far-calls into them. */
 
 #include "game.h"
+#include "toc.h"
+#include "disk.h"
 #include "vga.h"
 
-/* forward declarations */
-void game_pong(void);
-
-static game_entry games[] = {
-    {"pong", "Classic Pong - 2 Player", game_pong},
-};
-static int game_cnt = 1;
+#define GAME_SEG  0x2000
+#define MK_FP(s, o) ((void far *)(((uint32_t)(s) << 16) | (uint16_t)(o)))
 
 void game_list(void) {
     int i;
-    for (i = 0; i < game_cnt; ++i) {
+    int n = toc_count();
+    for (i = 0; i < n; ++i) {
+        const toc_entry *e = toc_get(i);
+        if (!e) continue;
         vga_puts("  ");
-        vga_puts(games[i].name);
+        vga_puts(e->name);
         vga_puts(" - ");
-        vga_puts(games[i].desc);
+        vga_puts(e->desc);
         vga_putc('\n');
     }
 }
 
 int game_run(const char *name) {
-    int i;
-    for (i = 0; i < game_cnt; ++i) {
-        const char *a = name;
-        const char *b = games[i].name;
-        while (*a && *b && *a == *b) { ++a; ++b; }
-        if (*a == '\0' && *b == '\0') {
-            games[i].run();
-            return 0;
-        }
+    const toc_entry *e;
+    int err;
+
+    e = toc_find(name);
+    if (!e) return -1;
+
+    err = disk_read(e->sector, e->nsectors, GAME_SEG, 0);
+    if (err) return -2;
+
+    /* TODO: decompress if e->flags & 1 */
+
+    {
+        void (far *fn)(void);
+        fn = (void (far *)(void))MK_FP(GAME_SEG, 0);
+        (*fn)();
     }
-    return -1;
+
+    /* game returned — restore VGA state */
+    vga_init();
+    return 0;
 }

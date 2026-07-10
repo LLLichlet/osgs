@@ -9,6 +9,7 @@ typedef unsigned long  uint32_t;
 typedef signed char    int8_t;
 typedef signed short   int16_t;
 typedef signed long    int32_t;
+typedef uint16_t       uintptr_t;  /* near pointers in small memory model */
 
 #define NULL  ((void *)0)
 #define true  1

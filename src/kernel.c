@@ -3,6 +3,7 @@
 #include "vga.h"
 #include "keyboard.h"
 #include "shell.h"
+#include "toc.h"
 
 static void splash_str(int x, int y, const char *s, uint8_t attr) {
     while (*s) {
@@ -46,7 +47,7 @@ static void splash_screen(void) {
     /* content — center of box at col 40 */
     splash_str(38, by + 4,  "osgs", title);
     splash_str(28, by + 6,  "Old-School Games System", text);
-    splash_str(36, by + 7,  "v0.1.0", text);
+    splash_str(36, by + 7,  "v0.2.0", text);
     splash_str(30, by + 9,  "A tiny real-mode OS", text);
     splash_str(32, by + 10, "for retro gaming.", text);
 
@@ -63,6 +64,8 @@ void kmain(void) {
 
     splash_screen();
     kbd_getch();  /* wait for any key */
+
+    toc_init();
 
     vga_clear();
     shell_run();
