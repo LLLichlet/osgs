@@ -47,16 +47,15 @@ static void splash_screen(void) {
     /* content — center of box at col 40 */
     splash_str(38, by + 4,  "osgs", title);
     splash_str(28, by + 6,  "Old-School Games System", text);
-    splash_str(36, by + 7,  "v0.2.0", text);
-    splash_str(30, by + 9,  "A tiny real-mode OS", text);
-    splash_str(32, by + 10, "for retro gaming.", text);
+    splash_str(30, by + 8,  "A tiny real-mode OS", text);
+    splash_str(32, by + 9,  "for retro gaming.", text);
 
     /* decorative separator */
-    vga_putc_at(36, by + 12, 0x10, text);
-    splash_str(38, by + 12, " [+] ", title);
-    vga_putc_at(44, by + 12, 0x11, text);
+    vga_putc_at(36, by + 11, 0x10, text);
+    splash_str(38, by + 11, " [+] ", title);
+    vga_putc_at(44, by + 11, 0x11, text);
 
-    splash_str(32, by + 15, "Press any key...", prompt);
+    splash_str(32, by + 14, "Press any key...", prompt);
 }
 
 void kmain(void) {
