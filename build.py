@@ -91,12 +91,11 @@ def build_game(game_name, gamekit_objs):
         os.path.join("games", game_name + ".c"),
         os.path.join("games", game_name + ".obj"))
 
-    # game_entry.asm -> .obj (shared, compile once if not exists)
+    # game_entry.asm -> .obj (always rebuild — critical for return path)
     entry_obj = os.path.join(BUILD, "game_entry.obj")
-    if not os.path.exists(entry_obj):
-        run(["nasm", "-f", "obj",
-             os.path.join(SRC, "game_entry.asm"),
-             "-o", entry_obj])
+    run(["nasm", "-f", "obj",
+         os.path.join(SRC, "game_entry.asm"),
+         "-o", entry_obj])
 
     # link: entry first -> _start at offset 0
     game_bin = os.path.join(BUILD, "games", game_name + ".bin")
@@ -232,11 +231,49 @@ def img():
     print(f"Image: {img_file} ({size} bytes = {size / 1024:.1f} KB)")
 
 
+QEMU_BASE = [
+    "qemu-system-i386",
+    "-drive", "file={img},format=raw,if=floppy,index=0",
+    "-boot", "a",
+]
+
+
 def run_qemu():
     img()
     img_file = os.path.join(BUILD, "osgs.img")
-    run(["qemu-system-i386", "-drive",
-         f"file={img_file},format=raw,if=floppy,index=0", "-boot", "a"])
+    cmd = [arg.format(img=img_file) for arg in QEMU_BASE]
+    run(cmd)
+
+
+def run_monitor():
+    """QEMU with monitor on stdio — use 'info registers', 'x/10xw addr', etc."""
+    img()
+    img_file = os.path.join(BUILD, "osgs.img")
+    cmd = [arg.format(img=img_file) for arg in QEMU_BASE]
+    cmd += ["-monitor", "stdio"]
+    run(cmd)
+
+
+def run_debug():
+    """QEMU with GDB stub on :1234. Run 'gdb' in another terminal, then:
+       (gdb) target remote :1234
+       (gdb) set architecture i8086
+       (gdb) layout asm
+    """
+    img()
+    img_file = os.path.join(BUILD, "osgs.img")
+    cmd = [arg.format(img=img_file) for arg in QEMU_BASE]
+    cmd += ["-s", "-S"]   # -s = gdb on :1234, -S = pause at start
+    run(cmd)
+
+
+def run_gdb_and_monitor():
+    """Both GDB stub and monitor on stdio."""
+    img()
+    img_file = os.path.join(BUILD, "osgs.img")
+    cmd = [arg.format(img=img_file) for arg in QEMU_BASE]
+    cmd += ["-s", "-S", "-monitor", "stdio"]
+    run(cmd)
 
 
 def clean():
@@ -258,6 +295,12 @@ def main():
         img()
     elif cmd == "run":
         run_qemu()
+    elif cmd == "monitor":
+        run_monitor()
+    elif cmd == "debug":
+        run_debug()
+    elif cmd == "dbgmon":
+        run_gdb_and_monitor()
     elif cmd == "clean":
         clean()
     else:
