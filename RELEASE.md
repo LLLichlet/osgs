@@ -1,10 +1,7 @@
-## What's new
+## What's new in 0.3.1
 
-- **Snake** — classic arcade game added to the collection
-  - WASD + arrow keys, ring-buffer body (max 200 segments)
-  - Food placement with collision avoidance, speed ramps with score
-  - Death flash animation, ESC to quit
-- **Version in `about`** — removed from splash, now shown via `about` command
+- **Snake** — fixed keyboard buffer bug
+  - Keys pressed during the death-flash animation no longer bleed through and dismiss the Game Over screen instantly
 
 ## What's inside
 

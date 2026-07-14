@@ -259,6 +259,7 @@ int game_main(void) {
         }
     }
     vga_puts("\nPress any key to return...");
+    while (kbd_kbhit()) kbd_getch(); /* drain keys buffered during death flash */
     kbd_getch();
     return 0;
 }

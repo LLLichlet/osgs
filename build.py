@@ -20,7 +20,7 @@ GAMEKIT_C = ["vga.c", "keyboard.c", "system.c"]
 # games: {name: description}
 GAMES = {
     "pong":  "Classic Pong - 2 Player",
-    "snake": "Snake - Eat, grow, don't bite yourself",
+    "snake": "Eat, grow, don't bite yourself",
 }
 
 # disk layout constants
