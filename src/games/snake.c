@@ -1,5 +1,6 @@
-/* osgs — Snake: classic arcade game. */
+/* osgs — Snake: classic arcade game */
 
+#include "gfx.h"
 #include "vga.h"
 #include "keyboard.h"
 #include "system.h"
@@ -15,44 +16,41 @@
 #define KEY_LEFT  0x4B
 #define KEY_RIGHT 0x4D
 
-/* playfield (inside border) */
-#define FLD_L  1
-#define FLD_R  78
-#define FLD_T  2
-#define FLD_B  23
-#define FLD_W  (FLD_R - FLD_L + 1)
-#define FLD_H  (FLD_B - FLD_T + 1)
+/* layout */
+#define SCORE_H   14
+#define BORDER_W  1
+#define TILE_SZ   5
+#define GRID_COLS 60
+#define GRID_ROWS 35
+#define FLD_X     ((GFX_W - GRID_COLS * TILE_SZ) / 2)    /* = 10 */
+#define FLD_Y     (SCORE_H + 2)
 
 #define MAX_LEN   200
 #define INIT_LEN  4
 
-/* tile chars */
-#define SNAKE_CHAR 0xDB
-#define FOOD_CHAR  0x0F
-
 /* colors */
-#define ATTR_SNAKE   VGA_ATTR(VGA_LIGHT_GREEN, VGA_BLACK)
-#define ATTR_HEAD    VGA_ATTR(VGA_GREEN, VGA_LIGHT_GREEN)
-#define ATTR_FOOD    VGA_ATTR(VGA_YELLOW, VGA_BLACK)
-#define ATTR_BORDER  VGA_ATTR(VGA_LIGHT_CYAN, VGA_BLACK)
-#define ATTR_SCORE   VGA_ATTR(VGA_WHITE, VGA_BLACK)
-#define ATTR_OVER    VGA_ATTR(VGA_LIGHT_RED, VGA_BLACK)
+#define C_BG      GFX_BLACK
+#define C_BORDER  GFX_LIGHT_CYAN
+#define C_SNAKE   GFX_GREEN
+#define C_HEAD    GFX_LIGHT_GREEN
+#define C_FOOD    GFX_YELLOW
+#define C_SCORE   GFX_WHITE
+#define C_OVER    GFX_LIGHT_RED
 
 typedef struct {
     uint8_t x, y;
 } point;
 
 static point   snake[MAX_LEN];
-static uint8_t head;   /* ring-buffer head index */
+static uint8_t head;
 static uint8_t len;
 static int8_t  dir_x, dir_y;
 static uint8_t food_x, food_y;
 static uint16_t rng;
 static uint16_t score;
 
-static void put(int x, int y, char c, uint8_t attr) {
-    vga_putc_at(x, y, c, attr);
-}
+static int gx(uint8_t col) { return FLD_X + (int)col * TILE_SZ; }
+static int gy(uint8_t row) { return FLD_Y + (int)row * TILE_SZ; }
 
 static uint8_t rnd(uint8_t max) {
     rng = rng * 25173 + 13849;
@@ -60,90 +58,79 @@ static uint8_t rnd(uint8_t max) {
 }
 
 static void draw_border(void) {
-    int i;
-    put(0, 1, 0xC9, ATTR_BORDER);
-    put(79, 1, 0xBB, ATTR_BORDER);
-    for (i = 1; i < 79; ++i) put(i, 1,  0xCD, ATTR_BORDER);
-    put(0, 24, 0xC8, ATTR_BORDER);
-    put(79, 24, 0xBC, ATTR_BORDER);
-    for (i = 1; i < 79; ++i) put(i, 24, 0xCD, ATTR_BORDER);
-    for (i = FLD_T; i <= FLD_B; ++i) {
-        put(0, i,  0xBA, ATTR_BORDER);
-        put(79, i, 0xBA, ATTR_BORDER);
-    }
+    gfx_rect(FLD_X - BORDER_W, FLD_Y - BORDER_W,
+             GRID_COLS * TILE_SZ + BORDER_W * 2,
+             GRID_ROWS * TILE_SZ + BORDER_W * 2, C_BORDER);
 }
 
 static void draw_score(void) {
-    const char *s = "SCORE: ";
+    char buf[12];
     uint16_t n;
-    int i;
-    char buf[6];
-    for (i = 0; s[i]; ++i) put(2 + i, 0, s[i], ATTR_SCORE);
+    int pos;
 
+    gfx_drawstr(FLD_X, 3, "SCORE: ", C_SCORE, C_BG);
     n = score;
-    /* up to 5 digits */
-    i = 5;
-    if (n == 0) buf[--i] = '0';
-    while (n && i > 0) { buf[--i] = '0' + (n % 10); n /= 10; }
-    while (i > 0) buf[--i] = ' ';
-    for (i = 0; i < 5; ++i) put(9 + i, 0, buf[i], ATTR_SCORE);
+    pos = 10;
+    if (n == 0) buf[--pos] = '0';
+    else
+        while (n && pos > 5) { buf[--pos] = '0' + (char)(n % 10); n /= 10; }
+    buf[10] = '\0';
+    gfx_drawstr(FLD_X + 6 * 8, 3, &buf[pos], C_SCORE, C_BG);
 }
 
-/* ring-buffer helper: index of tail (oldest segment) */
 static uint8_t tail_idx(void) {
     return (uint8_t)((head + MAX_LEN - len + 1) % MAX_LEN);
 }
 
-static int is_on_snake(uint8_t x, uint8_t y, int skip_head) {
+static int is_on_snake(uint8_t gx_, uint8_t gy_, int skip_head) {
     uint8_t i, idx, start;
     start = skip_head ? 1 : 0;
     for (i = start; i < len; ++i) {
         idx = (uint8_t)((head + MAX_LEN - i) % MAX_LEN);
-        if (snake[idx].x == x && snake[idx].y == y) return 1;
+        if (snake[idx].x == gx_ && snake[idx].y == gy_) return 1;
     }
     return 0;
 }
 
 static void place_food(void) {
     do {
-        food_x = (uint8_t)(FLD_L + 1 + rnd((uint8_t)(FLD_W - 3)));
-        food_y = (uint8_t)(FLD_T + rnd((uint8_t)FLD_H));
+        food_x = rnd((uint8_t)GRID_COLS);
+        food_y = rnd((uint8_t)GRID_ROWS);
     } while (is_on_snake(food_x, food_y, 0));
 }
 
-static void draw_all(void) {
+static void draw_seg(uint8_t sx, uint8_t sy, uint8_t color) {
+    gfx_fill(gx(sx), gy(sy), TILE_SZ, TILE_SZ, color);
+}
+
+static void draw_snake_all(uint8_t head_color, uint8_t body_color) {
     uint8_t i, idx;
-    vga_clear();
-    draw_border();
-    draw_score();
-    /* draw food */
-    put(food_x, food_y, FOOD_CHAR, ATTR_FOOD);
-    /* draw snake from tail to head */
     for (i = 0; i < len; ++i) {
         idx = (uint8_t)((head + MAX_LEN - i) % MAX_LEN);
-        put(snake[idx].x, snake[idx].y, SNAKE_CHAR,
-            (i == 0) ? ATTR_HEAD : ATTR_SNAKE);
+        draw_seg(snake[idx].x, snake[idx].y, (i == 0) ? head_color : body_color);
     }
 }
 
 int game_main(void) {
-    uint8_t new_head, old_tail;
+    uint8_t new_head, old_tail, prev_head;
     uint8_t nx, ny;
     uint8_t running, dead;
     uint8_t sc;
     uint16_t delay;
-    uint8_t i, idx;
+    uint8_t i;
     int flashes;
 
-    vga_clear();
+    gfx_init();
+    gfx_clear(C_BG);
+    draw_border();
 
-    /* init snake: horizontal, center of field */
+    /* init snake horizontal, centered */
     dir_x = 1; dir_y = 0;
     len  = INIT_LEN;
     head = INIT_LEN - 1;
     {
-        uint8_t sx = 40;
-        uint8_t sy = 13;
+        uint8_t sx = (uint8_t)(GRID_COLS / 2);
+        uint8_t sy = (uint8_t)(GRID_ROWS / 2);
         for (i = 0; i < len; ++i) {
             snake[len - 1 - i].x = (uint8_t)(sx - i);
             snake[len - 1 - i].y = sy;
@@ -152,14 +139,15 @@ int game_main(void) {
     score = 0;
     rng   = 0xACE1;
 
+    draw_score();
     place_food();
-    draw_all();
+    draw_seg(food_x, food_y, C_FOOD);
+    draw_snake_all(C_HEAD, C_SNAKE);
 
     running = 1;
     dead    = 0;
 
     while (running) {
-        /* input (non-blocking) */
         do {
             sc = kbd_get_scancode();
             if (sc == KEY_ESC) { running = 0; dead = 0; break; }
@@ -171,77 +159,59 @@ int game_main(void) {
 
         if (!running) break;
 
-        /* compute new head position */
         nx = snake[head].x + dir_x;
         ny = snake[head].y + dir_y;
 
-        /* wall collision */
-        if (nx < FLD_L || nx > FLD_R || ny < FLD_T || ny > FLD_B) {
-            dead = 1; break;
-        }
+        if (nx >= GRID_COLS || ny >= GRID_ROWS) { dead = 1; break; }
+        if (is_on_snake(nx, ny, 1))            { dead = 1; break; }
 
-        /* self collision (skip current head) */
-        if (is_on_snake(nx, ny, 1)) {
-            dead = 1; break;
-        }
+        prev_head = head;
+        old_tail  = tail_idx();
+        new_head  = (uint8_t)((head + 1) % MAX_LEN);
+        head = new_head;
+        snake[head].x = nx;
+        snake[head].y = ny;
 
-        /* remember old tail for erasing */
-        old_tail = tail_idx();
-
-        /* advance head in ring buffer */
-        new_head = (uint8_t)((head + 1) % MAX_LEN);
-        snake[new_head].x = nx;
-        snake[new_head].y = ny;
-
-        /* food check */
         if (nx == food_x && ny == food_y) {
-            head = new_head;
             ++len;
             ++score;
             draw_score();
-            put(food_x, food_y, SNAKE_CHAR, ATTR_SNAKE);
-            put(nx, ny, SNAKE_CHAR, ATTR_HEAD);
+            draw_seg(snake[prev_head].x, snake[prev_head].y, C_SNAKE);
+            draw_seg(nx, ny, C_HEAD);
             if (len < MAX_LEN) {
                 place_food();
-                put(food_x, food_y, FOOD_CHAR, ATTR_FOOD);
+                draw_seg(food_x, food_y, C_FOOD);
             }
         } else {
-            put(snake[old_tail].x, snake[old_tail].y, ' ', VGA_DEFAULT_ATTR);
-            head = new_head;
-            if (len > 1) {
-                uint8_t prev = (uint8_t)((head + MAX_LEN - 1) % MAX_LEN);
-                put(snake[prev].x, snake[prev].y, SNAKE_CHAR, ATTR_SNAKE);
-            }
-            put(nx, ny, SNAKE_CHAR, ATTR_HEAD);
+            draw_seg(snake[old_tail].x, snake[old_tail].y, C_BG);
+            draw_seg(snake[prev_head].x, snake[prev_head].y, C_SNAKE);
+            draw_seg(nx, ny, C_HEAD);
         }
 
-        delay = (score < 10) ? 35 : (score < 25) ? 20 : (score < 40) ? 12 : 8;
+        /* faster pace to match higher resolution */
+        if      (score < 10) delay = 30;
+        else if (score < 25) delay = 18;
+        else if (score < 40) delay = 10;
+        else                 delay = 6;
         sys_sleep((int)delay);
     }
 
-    /* flash snake on death only */
     if (dead) {
         for (flashes = 0; flashes < 3; ++flashes) {
-            for (i = 0; i < len; ++i) {
-                idx = (uint8_t)((head + MAX_LEN - i) % MAX_LEN);
-                put(snake[idx].x, snake[idx].y, SNAKE_CHAR, ATTR_OVER);
-            }
+            draw_snake_all(GFX_LIGHT_RED, GFX_RED);
             sys_sleep(150);
-            for (i = 0; i < len; ++i) {
-                idx = (uint8_t)((head + MAX_LEN - i) % MAX_LEN);
-                put(snake[idx].x, snake[idx].y, SNAKE_CHAR, ATTR_SNAKE);
-            }
+            draw_snake_all(C_HEAD, C_SNAKE);
             sys_sleep(100);
         }
     }
 
-    /* game over screen */
+    /* game over screen (text mode) */
+    gfx_shutdown();
     vga_clear();
-    vga_set_attr(ATTR_OVER);
+    vga_set_attr(VGA_ATTR(VGA_LIGHT_RED, VGA_BLACK));
     vga_puts("Game Over!\n\n");
     vga_set_attr(VGA_DEFAULT_ATTR);
     vga_puts("Final score: ");
-    /* print score digit by digit */
     {
         uint16_t n = score;
         char digits[6];
@@ -249,17 +219,12 @@ int game_main(void) {
         if (n == 0) {
             vga_putc('0');
         } else {
-            while (n > 0 && di < 5) {
-                digits[di++] = '0' + (char)(n % 10);
-                n /= 10;
-            }
-            while (di > 0) {
-                vga_putc(digits[--di]);
-            }
+            while (n > 0 && di < 5) { digits[di++] = '0' + (char)(n % 10); n /= 10; }
+            while (di > 0) vga_putc(digits[--di]);
         }
     }
     vga_puts("\nPress any key to return...");
-    while (kbd_kbhit()) kbd_getch(); /* drain keys buffered during death flash */
+    while (kbd_kbhit()) kbd_getch();
     kbd_getch();
     return 0;
 }

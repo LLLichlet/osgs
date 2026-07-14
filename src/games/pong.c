@@ -1,5 +1,6 @@
-/* osgs — Pong: classic 2-player paddle game. */
+/* osgs — Pong: classic 2-player paddle game */
 
+#include "gfx.h"
 #include "vga.h"
 #include "keyboard.h"
 #include "system.h"
@@ -11,212 +12,192 @@
 #define KEY_UP    0x48
 #define KEY_DOWN  0x50
 
-/* field boundaries */
-#define FLD_L  1
-#define FLD_R  78
-#define FLD_T  2
-#define FLD_B  23
+/* layout */
+#define SCORE_H   14
+#define BORDER_W  1
+#define FLD_X     6
+#define FLD_Y     (SCORE_H + 2)
+#define FLD_W     308
+#define FLD_H     180
+#define FLD_R     (FLD_X + FLD_W - 1)
+#define FLD_B     (FLD_Y + FLD_H - 1)
+#define NET_X     (FLD_X + FLD_W / 2)
 
-#define PADDLE_L_X   2
-#define PADDLE_R_X   77
-#define PADDLE_H     4
-#define WIN_SCORE    5
+#define PADDLE_W  4
+#define PADDLE_H  24
+#define PADDLE_L_X (FLD_X + 6)
+#define PADDLE_R_X (FLD_R - 6 - PADDLE_W)
+#define PADDLE_INSET 3
 
-#define ATTR_SCORE VGA_ATTR(VGA_YELLOW, VGA_BLACK)
-#define ATTR_BALL  VGA_ATTR(VGA_LIGHT_GREEN, VGA_BLACK)
-#define ATTR_PADL  VGA_ATTR(VGA_LIGHT_CYAN, VGA_BLACK)
-#define ATTR_PADR  VGA_ATTR(VGA_LIGHT_MAGENTA, VGA_BLACK)
+#define BALL_SZ     4
+#define BALL_SPEED  2
+#define WIN_SCORE   5
 
-static void put(int x, int y, char c, uint8_t attr) {
-    vga_putc_at(x, y, c, attr);
-}
+/* colors */
+#define C_BG     GFX_BLACK
+#define C_BORDER GFX_WHITE
+#define C_NET    GFX_DARK_GRAY
+#define C_BALL   GFX_LIGHT_GREEN
+#define C_PADL   GFX_LIGHT_CYAN
+#define C_PADR   GFX_LIGHT_MAGENTA
+#define C_SCORE  GFX_YELLOW
 
 static void draw_border(void) {
+    /* single-pixel box */
+    gfx_rect(FLD_X - BORDER_W, FLD_Y - BORDER_W,
+             FLD_W + BORDER_W * 2, FLD_H + BORDER_W * 2, C_BORDER);
+}
+
+static void draw_net(void) {
     int i;
-    /* top border (row 1) */
-    put(0, 1,  0xC9, VGA_DEFAULT_ATTR);
-    put(79, 1, 0xBB, VGA_DEFAULT_ATTR);
-    for (i = 1; i < 79; ++i) {
-        put(i, 1, 0xCD, VGA_DEFAULT_ATTR);
-    }
-    /* bottom border (row 24) */
-    put(0, 24, 0xC8, VGA_DEFAULT_ATTR);
-    put(79, 24,0xBC, VGA_DEFAULT_ATTR);
-    for (i = 1; i < 79; ++i) {
-        put(i, 24, 0xCD, VGA_DEFAULT_ATTR);
-    }
-    /* side borders (rows 2..23) */
-    for (i = FLD_T; i <= FLD_B; ++i) {
-        put(0, i,  0xBA, VGA_DEFAULT_ATTR);
-        put(79, i, 0xBA, VGA_DEFAULT_ATTR);
-    }
-    /* center net (dashed line) */
-    for (i = FLD_T; i <= FLD_B; i += 2) {
-        put(40, i, 0xB3, VGA_DEFAULT_ATTR);
+    for (i = FLD_Y; i <= FLD_B; i += 8) {
+        int h = i + 4 <= FLD_B + 1 ? 4 : FLD_B + 1 - i;
+        if (h > 0) gfx_fill(NET_X, i, 1, h, C_NET);
     }
 }
 
 static void draw_score(int s1, int s2) {
-    int x;
-    char buf[20];
-    char *digits = "0123456789";
-
+    char buf[16];
     buf[0] = 'P'; buf[1] = '1'; buf[2] = ':'; buf[3] = ' ';
-    buf[4] = digits[s1];
-    buf[5] = ' ';
-    buf[6] = ' ';
-    buf[7] = ' ';
-    buf[8] = 'P'; buf[9] = '2'; buf[10] = ':'; buf[11] = ' ';
-    buf[12] = digits[s2];
-    buf[13] = ' ';
-    buf[14] = 'E'; buf[15] = 'S'; buf[16] = 'C';
-    buf[17] = ' '; buf[18] = 'Q'; buf[19] = '\0';
+    buf[4] = '0' + s1;
+    buf[5] = '\0';
+    gfx_drawstr(FLD_X + 4, 3, buf, C_SCORE, C_BG);
 
-    for (x = 0; x < 20; ++x) {
-        put(30 + x, 0, buf[x], ATTR_SCORE);
-    }
-}
+    buf[0] = 'P'; buf[1] = '2'; buf[2] = ':'; buf[3] = ' ';
+    buf[4] = '0' + s2;
+    buf[5] = '\0';
+    gfx_drawstr(FLD_R - 7 * 8 + 4, 3, buf, C_SCORE, C_BG);
 
-static void draw_paddle(int x, int y, uint8_t attr) {
-    int i;
-    for (i = 0; i < PADDLE_H; ++i) {
-        put(x, y - 1 + i, 0xDB, attr);
-    }
-}
-
-static void erase_paddle(int x, int y) {
-    int i;
-    for (i = 0; i < PADDLE_H; ++i) {
-        put(x, y - 1 + i, ' ', VGA_DEFAULT_ATTR);
-    }
-}
-
-static int sign(int n) {
-    return (n > 0) ? 1 : -1;
+    gfx_drawstr(NET_X - 12, 3, "ESC Q", GFX_DARK_GRAY, C_BG);
 }
 
 int game_main(void) {
-    int p1_y, p2_y, p1_oy, p2_oy;
-    int ball_x, ball_y, ball_ox, ball_oy;
-    int ball_dx, ball_dy;
+    int p1_y, p2_y;
+    int ball_x, ball_y, ball_dx, ball_dy;
     int score1, score2;
-    int tick;
 
-    vga_clear();
+    gfx_init();
+    gfx_clear(C_BG);
     draw_border();
-    p1_y = 13;
-    p2_y = 13;
-    ball_x = 40;
-    ball_y = 13;
-    ball_dx = 1;
-    ball_dy = 1;
+    draw_net();
+
+    p1_y = FLD_Y + FLD_H / 2 - PADDLE_H / 2;
+    p2_y = FLD_Y + FLD_H / 2 - PADDLE_H / 2;
+    ball_x = NET_X - BALL_SZ / 2;
+    ball_y = FLD_Y + FLD_H / 2 - BALL_SZ / 2;
+    ball_dx = BALL_SPEED;
+    ball_dy = BALL_SPEED;
     score1 = 0;
     score2 = 0;
-    tick = 0;
 
     draw_score(score1, score2);
-    draw_paddle(PADDLE_L_X, p1_y, ATTR_PADL);
-    draw_paddle(PADDLE_R_X, p2_y, ATTR_PADR);
-    put(ball_x, ball_y, 0x07, ATTR_BALL);
+    gfx_fill(PADDLE_L_X, p1_y, PADDLE_W, PADDLE_H, C_PADL);
+    gfx_fill(PADDLE_R_X, p2_y, PADDLE_W, PADDLE_H, C_PADR);
+    gfx_fill(ball_x, ball_y, BALL_SZ, BALL_SZ, C_BALL);
 
     while (score1 < WIN_SCORE && score2 < WIN_SCORE) {
         uint8_t sc;
+        int old_bx = ball_x, old_by = ball_y;
 
-        /* input (non-blocking) */
         sc = kbd_get_scancode();
         if (sc == KEY_ESC) break;
 
-        p1_oy = p1_y;
-        p2_oy = p2_y;
+        /* paddle movement */
+        if (sc == KEY_W    && p1_y > FLD_Y + PADDLE_INSET)
+            p1_y -= 5;
+        if (sc == KEY_S    && p1_y < FLD_B - PADDLE_H - PADDLE_INSET)
+            p1_y += 5;
+        if (sc == KEY_UP   && p2_y > FLD_Y + PADDLE_INSET)
+            p2_y -= 5;
+        if (sc == KEY_DOWN && p2_y < FLD_B - PADDLE_H - PADDLE_INSET)
+            p2_y += 5;
 
-        if (sc == KEY_W    && p1_y > FLD_T + 1)        --p1_y;
-        if (sc == KEY_S    && p1_y < FLD_B - 2)        ++p1_y;
-        if (sc == KEY_UP   && p2_y > FLD_T + 1)        --p2_y;
-        if (sc == KEY_DOWN && p2_y < FLD_B - 2)        ++p2_y;
+        /* ball — update every frame */
+        ball_x += ball_dx;
+        ball_y += ball_dy;
 
-        /* redraw paddles only if moved */
-        if (p1_y != p1_oy) {
-            erase_paddle(PADDLE_L_X, p1_oy);
-            draw_paddle(PADDLE_L_X, p1_y, ATTR_PADL);
+        /* top / bottom bounce */
+        if (ball_y < FLD_Y) { ball_y = FLD_Y; ball_dy = -ball_dy; }
+        if (ball_y + BALL_SZ - 1 > FLD_B) {
+            ball_y = FLD_B - BALL_SZ + 1;
+            ball_dy = -ball_dy;
         }
-        if (p2_y != p2_oy) {
-            erase_paddle(PADDLE_R_X, p2_oy);
-            draw_paddle(PADDLE_R_X, p2_y, ATTR_PADR);
-        }
 
-        /* ball update (every 2nd tick) */
-        ++tick;
-        if (tick % 2 == 0) {
-            ball_ox = ball_x;
-            ball_oy = ball_y;
-
-            ball_x += ball_dx;
-            ball_y += ball_dy;
-
-            /* bounce (ball enters border row before reversing) */
-            if (ball_y < FLD_T) {
-                ball_y = FLD_T + 1;
-                ball_dy = 1;
-            }
-            if (ball_y > FLD_B) {
-                ball_y = FLD_B - 1;
-                ball_dy = -1;
-            }
-
-            /* bounce off left paddle */
-            if (ball_x == PADDLE_L_X + 1 &&
-                ball_y >= p1_y - 1 &&
-                ball_y <= p1_y + 2) {
-                ball_x = PADDLE_L_X + 1;
-                ball_dx = 1;
-                ball_dy = (ball_y > p1_y) ? 1 : ((ball_y < p1_y) ? -1 : 1);
-            }
-
-            /* bounce off right paddle */
-            if (ball_x == PADDLE_R_X - 1 &&
-                ball_y >= p2_y - 1 &&
-                ball_y <= p2_y + 2) {
-                ball_x = PADDLE_R_X - 1;
-                ball_dx = -1;
-                ball_dy = (ball_y > p2_y) ? 1 : ((ball_y < p2_y) ? -1 : -1);
-            }
-
-            /* scoring */
-            if (ball_x < FLD_L) {
-                ++score2;
-                ball_x = 40; ball_y = 13;
-                ball_dx = 1;
-                ball_dy = (tick & 1) ? 1 : -1;
-                draw_score(score1, score2);
-            }
-            if (ball_x > FLD_R) {
-                ++score1;
-                ball_x = 40; ball_y = 13;
-                ball_dx = -1;
-                ball_dy = (tick & 1) ? 1 : -1;
-                draw_score(score1, score2);
-            }
-
-            /* restore old ball position */
-            if (ball_ox >= 0 && ball_ox <= 79) {
-                put(ball_ox, ball_oy,
-                    (ball_oy == 1 || ball_oy == 24) ? (char)0xCD : ' ',
-                    VGA_DEFAULT_ATTR);
-            }
-            /* draw new ball, clamp display to field */
+        /* left paddle collision */
+        if (ball_dx < 0 &&
+            ball_x <= PADDLE_L_X + PADDLE_W &&
+            ball_x + BALL_SZ >= PADDLE_L_X &&
+            ball_y + BALL_SZ >= p1_y &&
+            ball_y <= p1_y + PADDLE_H) {
+            ball_x = PADDLE_L_X + PADDLE_W;
+            ball_dx = BALL_SPEED;
             {
-                int dx = ball_x;
-                int dy = ball_y;
-                if (dy < FLD_T) dy = FLD_T;
-                if (dy > FLD_B) dy = FLD_B;
-                put(dx, dy, 0x07, ATTR_BALL);
+                int hit = ball_y + BALL_SZ / 2 - p1_y;
+                ball_dy = (hit - PADDLE_H / 2) / 4;
+                if (ball_dy == 0) ball_dy = 1;
+                if (ball_dy < -3) ball_dy = -3;
+                if (ball_dy > 3)  ball_dy = 3;
             }
         }
 
-        sys_sleep(12);  /* ~83 fps, ball moves ~42 fps */
+        /* right paddle collision */
+        if (ball_dx > 0 &&
+            ball_x + BALL_SZ >= PADDLE_R_X &&
+            ball_x <= PADDLE_R_X + PADDLE_W &&
+            ball_y + BALL_SZ >= p2_y &&
+            ball_y <= p2_y + PADDLE_H) {
+            ball_x = PADDLE_R_X - BALL_SZ;
+            ball_dx = -BALL_SPEED;
+            {
+                int hit = ball_y + BALL_SZ / 2 - p2_y;
+                ball_dy = (hit - PADDLE_H / 2) / 4;
+                if (ball_dy == 0) ball_dy = 1;
+                if (ball_dy < -3) ball_dy = -3;
+                if (ball_dy > 3)  ball_dy = 3;
+            }
+        }
+
+        /* scoring */
+        if (ball_x < FLD_X) {
+            ++score2;
+            ball_x = NET_X - BALL_SZ / 2;
+            ball_y = FLD_Y + FLD_H / 2 - BALL_SZ / 2;
+            ball_dx = BALL_SPEED;
+            ball_dy = (ball_y & 1) ? 1 : -1;
+            gfx_fill(0, 0, GFX_W, SCORE_H, C_BG);
+            draw_score(score1, score2);
+        }
+        if (ball_x + BALL_SZ - 1 > FLD_R) {
+            ++score1;
+            ball_x = NET_X - BALL_SZ / 2;
+            ball_y = FLD_Y + FLD_H / 2 - BALL_SZ / 2;
+            ball_dx = -BALL_SPEED;
+            ball_dy = (ball_y & 1) ? 1 : -1;
+            gfx_fill(0, 0, GFX_W, SCORE_H, C_BG);
+            draw_score(score1, score2);
+        }
+
+        /* erase old, draw new (partial update) */
+        gfx_fill(old_bx, old_by, BALL_SZ, BALL_SZ, C_BG);
+        gfx_fill(ball_x, ball_y, BALL_SZ, BALL_SZ, C_BALL);
+        gfx_fill(PADDLE_L_X, FLD_Y, PADDLE_W, FLD_H, C_BG);
+        gfx_fill(PADDLE_L_X, p1_y, PADDLE_W, PADDLE_H, C_PADL);
+        gfx_fill(PADDLE_R_X, FLD_Y, PADDLE_W, FLD_H, C_BG);
+        gfx_fill(PADDLE_R_X, p2_y, PADDLE_W, PADDLE_H, C_PADR);
+        /* repair net dashes eaten by paddle/ball clears */
+        {
+            int i;
+            for (i = FLD_Y; i <= FLD_B; i += 8) {
+                int h = i + 4 <= FLD_B + 1 ? 4 : FLD_B + 1 - i;
+                if (h > 0) gfx_fill(NET_X, i, 1, h, C_NET);
+            }
+        }
+
+        sys_sleep(8);  /* ~125 fps */
     }
 
-    /* game over screen */
+    /* game over screen (text mode) */
+    gfx_shutdown();
     vga_clear();
     if (score1 >= WIN_SCORE) {
         vga_set_attr(VGA_ATTR(VGA_LIGHT_GREEN, VGA_BLACK));

@@ -33,6 +33,12 @@ static uint8_t inb(uint16_t port) {
 }
 
 void vga_init(void) {
+    /* set text mode 3 (80x25, 16-color) via BIOS — harmless if already in it,
+     * critical for restoring text mode after a game used graphics mode */
+    __asm {
+        mov ax, 0003h
+        int 10h
+    }
     vga_clear();
 }
 

@@ -15,7 +15,7 @@ KERNEL_C = ["kernel.c", "vga.c", "keyboard.c", "shell.c",
             "system.c", "game.c", "disk.c", "toc.c"]
 
 # gamekit C sources (linked into each game binary)
-GAMEKIT_C = ["vga.c", "keyboard.c", "system.c"]
+GAMEKIT_C = ["vga.c", "keyboard.c", "system.c", "gfx.c"]
 
 # games: {name: description}
 GAMES = {
